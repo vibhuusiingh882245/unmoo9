@@ -60,7 +60,7 @@ def extract_otp_from_text(text):
     return None
 
 def fetch_otp_from_yandex(email_address, timeout=180, mark_read=True):
-    """Yandex se OTP fetch karega - FIXED for plus addressing"""
+    """Yandex se OTP fetch karega"""
     try:
         imap = imaplib.IMAP4_SSL("imap.yandex.com")
         imap.login(YANDEX_EMAIL, YANDEX_APP_PASSWORD)
@@ -72,14 +72,11 @@ def fetch_otp_from_yandex(email_address, timeout=180, mark_read=True):
         print(f"{Y}[*] Looking for OTP for email: {email_address}{W}")
         
         while time.time() - start_time < timeout:
-            # Search by Delivered-To header (Yandex specific)
             status, messages = imap.search(None, f'HEADER Delivered-To "{email_address}"')
             
-            # Fallback: Search all UNSEEN emails from facebook
             if status != "OK" or not messages[0]:
                 status, messages = imap.search(None, '(UNSEEN FROM "facebookmail.com")')
             
-            # Last fallback: Search recent emails with base email
             if status != "OK" or not messages[0]:
                 status, messages = imap.search(None, f'TEXT "{base_email}"')
             
@@ -1786,7 +1783,7 @@ def get_cookie_string(session):
 
 # ============ TELEGRAM BOT KE LIYE REGISTER ACCOUNT FUNCTION - FIXED ============
 def register_account_for_bot(domain_choice="yandex", name_option="1", gender_option="3", custom_pass=None, max_retries=5):
-    """Single account creation for Telegram bot - OTP properly returned"""
+    """Single account creation for Telegram bot - ALWAYS fetches and shows OTP"""
     import time as _time
     
     for attempt in range(max_retries):
@@ -1870,7 +1867,6 @@ def register_account_for_bot(domain_choice="yandex", name_option="1", gender_opt
                     success, uid, cookies_dict, otp_code = confirm_account_with_auto_otp(ses, email)
                     if success and uid:
                         cookie_str = get_cookie_string(ses)
-                        # Return actual OTP code
                         print(f"{G}[✓] Returning OTP to bot: {otp_code}{W}")
                         return {
                             "name": f"{firstname} {lastname}",
@@ -1886,7 +1882,10 @@ def register_account_for_bot(domain_choice="yandex", name_option="1", gender_opt
                         continue
                 else:
                     cookie_str = get_cookie_string(ses)
-                    # No OTP needed
+                    # FIX: Account created without checkpoint - still fetch OTP from email!
+                    print(f"{Y}[!] Account created without checkpoint, fetching OTP from email anyway...{W}")
+                    otp_code = fetch_otp_from_yandex(email, timeout=60, mark_read=True)
+                    print(f"{G}[✓] OTP fetched from email: {otp_code}{W}")
                     return {
                         "name": f"{firstname} {lastname}",
                         "email": email,
@@ -1894,8 +1893,8 @@ def register_account_for_bot(domain_choice="yandex", name_option="1", gender_opt
                         "uid": login_coki["c_user"],
                         "cookies": cookie_str,
                         "session": ses,
-                        "otp_fetched": False,
-                        "otp_code": None
+                        "otp_fetched": True,
+                        "otp_code": otp_code if otp_code else "OTP_CHECK_EMAIL"
                     }
             
             otp_keywords = ["checkpoint", "confirm", "code", "verification"]
@@ -1905,7 +1904,6 @@ def register_account_for_bot(domain_choice="yandex", name_option="1", gender_opt
                 success, uid, cookies_dict, otp_code = confirm_account_with_auto_otp(ses, email)
                 if success and uid:
                     cookie_str = get_cookie_string(ses)
-                    # Return actual OTP code
                     print(f"{G}[✓] Returning OTP to bot: {otp_code}{W}")
                     return {
                         "name": f"{firstname} {lastname}",
